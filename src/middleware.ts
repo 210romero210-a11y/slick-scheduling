@@ -9,7 +9,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { UserRole } from "@/lib/auth/roles";
-import { getUserRole, getUserStudioIds, getPublicRoutes } from "@/lib/auth/middleware";
+import { getUserRole, getUserStudioIds } from "@/lib/auth/middleware";
+import { isOwnerRoute, isAdminRoute, isStaffRoute, isAuthenticatedRoute, getPublicRoutes } from "@/lib/auth/middleware";
 
 // Route matchers
 const isPublicRoute = createRouteMatcher(getPublicRoutes());
@@ -33,6 +34,14 @@ const isStaffRouteMatcher = createRouteMatcher([
   "/detailer(.*)",
   "/api/bookings(.*)",
   "/api/customers(.*)",
+]);
+
+// Authenticated routes
+const isAuthRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/bookings(.*)",
+  "/vehicles(.*)",
+  "/packages(.*)",
 ]);
 
 // FIXED Comment 2: Removed /services from protected routes (it's public per middleware config)
