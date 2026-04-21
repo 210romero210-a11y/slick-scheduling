@@ -1,0 +1,25 @@
+{
+  "name": "slick-scheduling",
+  "version": "1.0.0",
+  "description": "Best auto-detailing booking platform of 2026",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github...UzcC@github.com/210romero210-a11y/slick-scheduling.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/210romero210-a11y/slick-scheduling/issues"
+  },
+  "homepage": "https://github.com/210romero210-a11y/slick-scheduling#readme",
+  "dependencies": {
+    "@convex-dev/aggregate": "^0.0.7",
+    "@convex-dev/sharded-counter": "^0.0.5"
+  }
+}
