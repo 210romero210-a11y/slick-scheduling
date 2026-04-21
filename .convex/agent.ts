@@ -25,7 +25,7 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 // Model configuration
 export const MODEL_CONFIG = {
   chatModel: "gemma4:e4b",
-  embeddingModel: "nomic-embed-text",
+  embeddingModel: "qwen3-embedding:4b",
   temperature: 0.7,
   maxTokens: 4096,
 };
