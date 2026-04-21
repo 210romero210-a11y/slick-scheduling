@@ -9,8 +9,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { UserRole } from "@/lib/auth/roles";
-import { getUserRole, getUserStudioIds } from "@/lib/auth/middleware";
-import { isOwnerRoute, isAdminRoute, isStaffRoute, isAuthenticatedRoute, getPublicRoutes } from "@/lib/auth/middleware";
+import { getUserRole, getUserStudioIds, getPublicRoutes } from "@/lib/auth/middleware";
 
 // Route matchers
 const isPublicRoute = createRouteMatcher(getPublicRoutes());
