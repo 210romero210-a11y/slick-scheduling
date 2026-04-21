@@ -5,7 +5,7 @@
  * Booking actions that integrate with calculatePrice.
  */
 
-import { mutation, action } from "../../convex/_generated/server";
+import { mutation, action, query, api } from "../../convex/_generated/server";
 import { v } from "convex/values";
 import { calculatePrice, priceCalculationInput } from "./pricing";
 
@@ -40,15 +40,17 @@ export const createBooking = mutation({
     }
     
     // Calculate price using the dynamic pricing engine
-    const priceResult = await calculatePrice(ctx, {
-      vehicleClass: vehicle.vehicleClass,
-      dirtLevel,
-      serviceIds,
-      packageId,
-      studioId,
-      bayId,
-      serviceDate: Math.floor(startTime / 1000),  // Convert ms to seconds
-      jobType,
+    const priceResult = await ctx.runAction(api.actions.pricing.calculatePrice, {
+      input: {
+        vehicleClass: vehicle.vehicleClass,
+        dirtLevel,
+        serviceIds,
+        packageId,
+        studioId,
+        bayId,
+        serviceDate: Math.floor(startTime / 1000),  // Convert ms to seconds
+        jobType,
+      },
     });
     
     // Create the booking with calculated price
@@ -60,7 +62,7 @@ export const createBooking = mutation({
       detailerId,
       jobType,
       itemType: packageId ? "package" : "services",
-      itemIds: packageId ? [] : serviceIds,
+      itemIds: packageId ? [packageId] : serviceIds,
       dirtLevel,
       startTime,
       duration,
@@ -106,17 +108,19 @@ export const recalculateBookingPrice = mutation({
     }
     
     // Recalculate price
-    const priceResult = await calculatePrice(ctx, {
-      vehicleClass: vehicle.vehicleClass,
-      dirtLevel: newDirtLevel ?? booking.dirtLevel ?? "moderate",
-      serviceIds: booking.itemIds,
-      packageId: booking.packageId,
-      studioId: booking.studioId,
-      bayId: booking.bayId,
-      serviceDate: newDate 
-        ? Math.floor(newDate / 1000) 
-        : Math.floor(booking.startTime / 1000),
-      jobType: booking.jobType,
+    const priceResult = await ctx.runAction(api.actions.pricing.calculatePrice, {
+      input: {
+        vehicleClass: vehicle.vehicleClass,
+        dirtLevel: newDirtLevel ?? booking.dirtLevel ?? "moderate",
+        serviceIds: booking.itemIds,
+        packageId: booking.packageId,
+        studioId: booking.studioId,
+        bayId: booking.bayId,
+        serviceDate: newDate 
+          ? Math.floor(newDate / 1000) 
+          : Math.floor(booking.startTime / 1000),
+        jobType: booking.jobType,
+      },
     });
     
     // Update booking

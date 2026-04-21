@@ -88,11 +88,11 @@ const SEASONALITY: Record<string, { multiplier: number; months: number[] }> = {
   winter: { multiplier: 0.9, months: [11, 0, 1] },    // Dec-Feb (off-peak)
 };
 
-// Demand thresholds
+// Demand thresholds (occupancy rate 0.0 - 1.0)
 const DEMAND_THRESHOLDS = {
-  low: 0.4,      // < 40% occupancy = discount
-  medium: 0.7,    // 40-70% = normal
-  high: 0.9,      // > 70% = premium
+  low: 0.4,      // < 40% occupancy = discount (0.9x)
+  medium: 0.7,   // 40-70% occupancy = normal (1.0x)
+  high: 0.9,     // > 70% occupancy = premium (1.2x)
 };
 
 // ============================================
@@ -197,7 +197,7 @@ async function getServiceWithCache(
   ctx: import("../_generated/server").QueryCtx,
   serviceId: string
 ) {
-  return await ctx.db.get(serviceId as import("convex/dataModel").Doc<"services">);
+  return await ctx.db.get(serviceId as string);
 }
 
 /**
@@ -207,7 +207,7 @@ async function getPackageWithCache(
   ctx: import("../_generated/server").QueryCtx,
   packageId: string
 ) {
-  return await ctx.db.get(packageId as import("convex/dataModel").Doc<"packages">);
+  return await ctx.db.get(packageId as string);
 }
 
 // ============================================
@@ -528,30 +528,26 @@ export const checkBayAvailability = internalAction({
     
     const endTime = startTime + duration * 60 * 1000; // Convert minutes to ms
     
-    // Find conflicting bookings
-    const conflicts = await ctx.db
+    // Build query - filter by studio (and bay if specified)
+    let query = ctx.db
       .query("bookings")
-      .withIndex("by_studio", (q) => q.eq("studioId", studioId))
-      .filter((q) => 
-        q.or(
-          // New booking starts during existing
-          q.and(
-            q.gte(q.field("startTime"), startTime),
-            q.lt(q.field("startTime"), endTime)
-          ),
-          // Existing booking starts during new booking
-          q.and(
-            q.gte(q.field("startTime"), startTime),
-            q.lt(q.field("startTime"), endTime)
-          ),
-          // New booking contains existing
-          q.and(
-            q.lt(q.field("startTime"), startTime),
-            q.gt(q.field("endTime"), endTime)
-          )
-        )
-      )
-      .collect();
+      .withIndex("by_studio", (q) => q.eq("studioId", studioId));
+    
+    const allBookings = await query.collect();
+    
+    // Filter by bayId if provided
+    const relevantBookings = bayId 
+      ? allBookings.filter(b => b.bayId === bayId)
+      : allBookings;
+    
+    // Find conflicting bookings (time overlap check)
+    const conflicts = relevantBookings.filter(booking => {
+      const bookingStart = booking.startTime;
+      const bookingEnd = booking.endTime;
+      
+      // Two time ranges overlap if: A.start < B.end AND A.end > B.start
+      return bookingStart < endTime && bookingEnd > startTime;
+    });
     
     return {
       available: conflicts.length === 0,
