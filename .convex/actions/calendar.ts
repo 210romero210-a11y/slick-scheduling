@@ -204,12 +204,16 @@ export const getBayStatusSummary = query({
       upcomingBookings: todayBookings.filter((b) => b.startTime > Date.now()).length,
     };
     
-    // Count currently occupied (bookings that overlap with now)
+    // Count currently occupied (bookings that overlap with now) - deduplicate by bayId
     const now = Date.now();
-    summary.occupiedBays = todayBookings.filter((b) => {
-      const endTime = b.endTime || (b.startTime + (b.duration || 60) * 60 * 1000);
-      return b.startTime <= now && endTime > now;
-    }).length;
+    const occupiedBayIds = new Set<string>();
+    todayBookings.forEach((b) => {
+      const endTime = getBookingEnd(b);
+      if (b.startTime <= now && endTime > now) {
+        occupiedBayIds.add(b.bayId);
+      }
+    });
+    summary.occupiedBays = occupiedBayIds.size;
     
     return summary;
   },
@@ -245,7 +249,9 @@ export const getTimeSlots = query({
       .collect();
     
     const dayBookings = allBookings.filter((booking) => {
-      return booking.startTime >= dayStart.getTime() && booking.startTime < dayEnd.getTime();
+      const bookingEnd = getBookingEnd(booking);
+      // Check for overlap with day (bookings that start before dayEnd AND end after dayStart)
+      return booking.startTime < dayEnd.getTime() && bookingEnd > dayStart.getTime();
     });
     
     // Generate slots
@@ -318,10 +324,9 @@ export const findAvailableSlots = action({
     date: v.number(),
     duration: v.number(),  // Duration in minutes
     bayId: v.optional(v.id("bays")),
-    serviceId: v.optional(v.id("services")),
   },
   handler: async (ctx, args) => {
-    const { studioId, date, duration, bayId, serviceId } = args;
+    const { studioId, date, duration, bayId } = args;
     
     const dayStart = new Date(date);
     dayStart.setHours(DEFAULT_OPENING_HOUR, 0, 0, 0);
@@ -401,10 +406,9 @@ export const updateBayStatus = mutation({
   args: {
     bayId: v.id("bays"),
     isActive: v.boolean(),
-    statusNote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { bayId, isActive, statusNote } = args;
+    const { bayId, isActive } = args;
     
     await ctx.db.patch(bayId, {
       isActive,
@@ -418,6 +422,25 @@ export const updateBayStatus = mutation({
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Get booking end time (derived from startTime + duration or endTime)
+ */
+export function getBookingEnd(booking: { startTime: number; endTime?: number; duration?: number }): number {
+  return booking.endTime || (booking.startTime + (booking.duration || 60) * 60 * 1000);
+}
+
+/**
+ * Check if two bookings overlap
+ */
+function bookingsOverlap(
+  a: { startTime: number; endTime?: number; duration?: number },
+  bStart: number,
+  bEnd: number
+): boolean {
+  const aEnd = getBookingEnd(a);
+  return a.startTime < bEnd && aEnd > bStart;
+}
 
 /**
  * Group bookings by day based on view type

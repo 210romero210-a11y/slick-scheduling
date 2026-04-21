@@ -161,14 +161,13 @@ export const getBookingDetails = query({
  */
 export const getBookingConflicts = query({
   args: {
-    studioId: v.id("studios"),
     bayId: v.id("bays"),
     startTime: v.number(),
     endTime: v.number(),
     excludeBookingId: v.optional(v.id("bookings")),
   },
   handler: async (ctx, args) => {
-    const { studioId, bayId, startTime, endTime, excludeBookingId } = args;
+    const { bayId, startTime, endTime, excludeBookingId } = args;
     
     // Get all bookings for this bay
     const bookings = await ctx.db
