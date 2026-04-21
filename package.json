@@ -2,24 +2,24 @@
   "name": "slick-scheduling",
   "version": "1.0.0",
   "description": "Best auto-detailing booking platform of 2026",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github...UzcC@github.com/210romero210-a11y/slick-scheduling.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/210romero210-a11y/slick-scheduling/issues"
-  },
-  "homepage": "https://github.com/210romero210-a11y/slick-scheduling#readme",
   "dependencies": {
-    "@convex-dev/aggregate": "^0.0.7",
-    "@convex-dev/sharded-counter": "^0.0.5"
+    "@clerk/nextjs": "^6.12.5",
+    "@convex-dev/aggregate": "^0.2.2-alpha.0",
+    "@convex-dev/sharded-counter": "^0.2.0",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "typescript": "^5.7.3"
   }
 }

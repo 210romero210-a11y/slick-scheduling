@@ -196,15 +196,19 @@ export const serviceAddonObject = v.object({
 export default defineSchema({
   // ---------- USERS TABLE ----------
   users: defineTable({
+    clerkUserId: v.optional(v.string()), // Clerk user ID for authentication
     email: v.string(),
     name: v.string(),
     role: userRoleEnum,
+    studioIds: v.optional(v.array(v.id("studios"))), // Multi-studio access for owners/staff
     phone: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    defaultStudioId: v.optional(v.id("studios")), // Default studio for dashboard
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_clerk_user_id", ["clerkUserId"]) // For Clerk auth lookups
     .index("by_email", ["email"])
     .index("by_role", ["role"])
     .index("by_active", ["isActive"]),
@@ -306,8 +310,8 @@ export default defineSchema({
   })
     .index("by_city", ["city"])
     .index("by_state", ["state"])
-    .index("by_active", ["isActive"])
-    // Note: For geospatial queries, use $cardinalityScore or external service
+    .index("by_active", ["isActive"]),
+  // Note: For geospatial queries, use $cardinalityScore or external service
     // like PostGIS/Stripe for production. Convex supports basic geo via $cardinalityScore.
 
   // ---------- BAYS TABLE (Enhanced) ----------
