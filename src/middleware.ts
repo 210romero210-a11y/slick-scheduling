@@ -35,14 +35,6 @@ const isStaffRouteMatcher = createRouteMatcher([
   "/api/customers(.*)",
 ]);
 
-// Authenticated routes
-const isAuthRoute = createRouteMatcher([
-  "/dashboard(.*)",
-  "/bookings(.*)",
-  "/vehicles(.*)",
-  "/packages(.*)",
-]);
-
 // FIXED Comment 2: Removed /services from protected routes (it's public per middleware config)
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
