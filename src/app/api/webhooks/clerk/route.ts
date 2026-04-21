@@ -73,7 +73,6 @@ export async function POST(req: Request) {
   // Handle user.created - Create new user in Convex
   if (type === "user.created") {
     const email = data.email_addresses[0]?.email_address;
-    const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || email;
     
     // In a real implementation, you would call Convex mutation here
     // await convex.mutation("users:create", {
