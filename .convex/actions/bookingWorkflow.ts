@@ -2,40 +2,18 @@
  * ANOLLA SPEC - AI BOOKING WORKFLOW
  * Ticket 6: AI-Powered Autonomous Booking
  * 
- * Orchestrates multi-step booking process using:
- * - @convex-dev/workflow for durable multi-step processes
+ * Multi-step booking workflow using:
+ * - @convex-dev/workflow for durable execution
  * - @convex-dev/workpool for parallel tasks
- * - @convex-dev/agent for AI decision making
- * - Convex Orchestrator for structured outputs
  */
 
-import { action, internalMutation, mutation, query } from "../_generated/server";
+import { action, internal, internalMutation, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { Workpool } from "@convex-dev/workpool";
-import { Workflow } from "@convex-dev/workflow";
-import { Id } from "./_generated/dataModel";
-
-// ============================================
-// WORKFLOW CONFIGURATION
-// ============================================
-
-const bookingWorkflowConfig = {
-  name: "bookingWorkflow",
-  maxParallelism: 5,
-};
 
 // ============================================
 // TYPES
 // ============================================
-
-const bookingStatusEnum = v.union(
-  v.literal("pending"),
-  v.literal("confirmed"),
-  v.literal("in_progress"),
-  v.literal("completed"),
-  v.literal("cancelled"),
-  v.literal("no_show")
-);
 
 const bookingRequest = v.object({
   userId: v.id("users"),
@@ -48,36 +26,19 @@ const bookingRequest = v.object({
   notes: v.optional(v.string()),
 });
 
-const workflowState = v.object({
-  currentStep: v.union(
-    v.literal("intake"),
-    v.literal("availability_check"),
-    v.literal("pricing"),
-    v.literal("confirmation"),
-    v.literal("complete"),
-    v.literal("failed")
-  ),
-  attempts: v.number(),
-  error: v.optional(v.string()),
-  bookingId: v.optional(v.id("bookings")),
-});
-
 // ============================================
-// WORKFLOW IMPLEMENTATION
+// STEP 1: INTAKE
 // ============================================
 
-/**
- * Step 1: Intake - Validate and prepare booking request
- */
-const intakeStep = internalMutation({
-  args: { workflowId: v.id("_workflows"), request: bookingRequest },
+export const intake = internalMutation({
+  args: { workflowId: v.id("workflows"), request: bookingRequest },
   handler: async (ctx, { workflowId, request }) => {
     // Validate user exists
     const user = await ctx.db.get(request.userId);
     if (!user) {
       await ctx.runMutation(internal.bookingWorkflow.fail, {
         workflowId,
-        error: "User not found"
+        error: "User not found",
       });
       return;
     }
@@ -87,7 +48,7 @@ const intakeStep = internalMutation({
     if (!vehicle) {
       await ctx.runMutation(internal.bookingWorkflow.fail, {
         workflowId,
-        error: "Vehicle not found"
+        error: "Vehicle not found",
       });
       return;
     }
@@ -97,7 +58,7 @@ const intakeStep = internalMutation({
     if (!service) {
       await ctx.runMutation(internal.bookingWorkflow.fail, {
         workflowId,
-        error: "Service not found"
+        error: "Service not found",
       });
       return;
     }
@@ -106,7 +67,7 @@ const intakeStep = internalMutation({
     if (!service.isActive) {
       await ctx.runMutation(internal.bookingWorkflow.fail, {
         workflowId,
-        error: "Service is not available"
+        error: "Service is not available",
       });
       return;
     }
@@ -114,57 +75,57 @@ const intakeStep = internalMutation({
     // Move to next step
     await ctx.runMutation(internal.bookingWorkflow.advance, {
       workflowId,
-      nextStep: "availability_check"
+      nextStep: "availability_check",
+      context: { request },
     });
   },
 });
 
-/**
- * Step 2: Availability Check - Find available slots
- */
-const availabilityCheckStep = action({
-  args: { workflowId: v.id("_workflows"), request: bookingRequest },
+// ============================================
+// STEP 2: AVAILABILITY CHECK
+// ============================================
+
+export const availabilityCheck = action({
+  args: { workflowId: v.id("workflows"), request: bookingRequest },
   handler: async (ctx, { workflowId, request }) => {
-    // Query available slots using calendar action
     const availableSlots = await ctx.runAction(internal.calendar.findAvailableSlots, {
       studioId: request.studioId,
       date: request.preferredDate,
-      duration: 60, // Default 1 hour
+      duration: 60,
       bayId: request.bayId ?? null,
     });
 
     if (availableSlots.length === 0) {
       await ctx.runMutation(internal.bookingWorkflow.fail, {
         workflowId,
-        error: "No available slots found for the requested date"
+        error: "No available slots found",
       });
       return;
     }
 
-    // Use first available slot
     const slot = availableSlots[0];
 
     await ctx.runMutation(internal.bookingWorkflow.advance, {
       workflowId,
       nextStep: "pricing",
-      context: { slot },
+      context: { request, slot },
     });
 
     return slot;
   },
 });
 
-/**
- * Step 3: Pricing - Calculate dynamic price
- */
-const pricingStep = action({
+// ============================================
+// STEP 3: PRICING
+// ============================================
+
+export const pricing = action({
   args: {
-    workflowId: v.id("_workflows"),
+    workflowId: v.id("workflows"),
     request: bookingRequest,
     slot: v.object({ bayId: v.id("bays"), startTime: v.number() }),
   },
   handler: async (ctx, { workflowId, request, slot }) => {
-    // Calculate dynamic price
     const price = await ctx.runAction(internal.pricing.calculatePrice, {
       serviceId: request.serviceId,
       vehicleId: request.vehicleId,
@@ -176,25 +137,25 @@ const pricingStep = action({
     await ctx.runMutation(internal.bookingWorkflow.advance, {
       workflowId,
       nextStep: "confirmation",
-      context: { price, slot },
+      context: { request, slot, price },
     });
 
     return { price, slot };
   },
 });
 
-/**
- * Step 4: Confirmation - Create booking
- */
-const confirmationStep = mutation({
+// ============================================
+// STEP 4: CONFIRMATION
+// ============================================
+
+export const confirmation = mutation({
   args: {
-    workflowId: v.id("_workflows"),
+    workflowId: v.id("workflows"),
     request: bookingRequest,
     slot: v.object({ bayId: v.id("bays"), startTime: v.number() }),
     price: v.number(),
   },
   handler: async (ctx, { workflowId, request, slot, price }) => {
-    // Create booking
     const bookingId = await ctx.db.insert("bookings", {
       userId: request.userId,
       studioId: request.studioId,
@@ -202,7 +163,7 @@ const confirmationStep = mutation({
       serviceId: request.serviceId,
       bayId: slot.bayId,
       startTime: slot.startTime,
-      duration: 60, // Default 1 hour
+      duration: 60,
       endTime: slot.startTime + 60 * 60 * 1000,
       price,
       status: "confirmed",
@@ -219,11 +180,12 @@ const confirmationStep = mutation({
   },
 });
 
-/**
- * Fail workflow
- */
-const failStep = internalMutation({
-  args: { workflowId: v.id("_workflows"), error: v.string() },
+// ============================================
+// WORKFLOW CONTROL
+// ============================================
+
+export const fail = internalMutation({
+  args: { workflowId: v.id("workflows"), error: v.string() },
   handler: async (ctx, { workflowId, error }) => {
     await ctx.db.patch(workflowId, {
       currentStep: "failed",
@@ -232,12 +194,9 @@ const failStep = internalMutation({
   },
 });
 
-/**
- * Advance to next step
- */
-const advanceStep = internalMutation({
+export const advance = internalMutation({
   args: {
-    workflowId: v.id("_workflows"),
+    workflowId: v.id("workflows"),
     nextStep: v.union(
       v.literal("intake"),
       v.literal("availability_check"),
@@ -249,15 +208,14 @@ const advanceStep = internalMutation({
     context: v.optional(v.any()),
   },
   handler: async (ctx, { workflowId, nextStep, context }) => {
-    await ctx.db.patch(workflowId, { currentStep: nextStep });
+    await ctx.db.patch(workflowId, {
+      currentStep: nextStep,
+    });
   },
 });
 
-/**
- * Complete workflow
- */
-const completeStep = internalMutation({
-  args: { workflowId: v.id("_workflows"), bookingId: v.id("bookings") },
+export const complete = internalMutation({
+  args: { workflowId: v.id("workflows"), bookingId: v.id("bookings") },
   handler: async (ctx, { workflowId, bookingId }) => {
     await ctx.db.patch(workflowId, {
       currentStep: "complete",
@@ -267,69 +225,7 @@ const completeStep = internalMutation({
 });
 
 // ============================================
-// PUBLIC API
-// ============================================
-
-/**
- * Start AI-powered booking workflow
- */
-export const startBookingWorkflow = action({
-  args: bookingRequest,
-  handler: async (ctx, request) => {
-    // Create workflow instance
-    const workflow = new Workflow(ctx, components.bookingWorkflow);
-
-    const workflowId = await workflow.create({
-      currentStep: "intake",
-      attempts: 0,
-    });
-
-    // Start intake step
-    await ctx.runMutation(internal.bookingWorkflow.intake, {
-      workflowId,
-      request,
-    });
-
-    return workflowId;
-  },
-});
-
-/**
- * Get workflow status
- */
-export const getWorkflowStatus = query({
-  args: { workflowId: v.id("_workflows") },
-  handler: async (ctx, { workflowId }) => {
-    const workflow = await ctx.db.get(workflowId);
-    if (!workflow) return null;
-
-    return {
-      currentStep: workflow.currentStep,
-      attempts: workflow.attempts,
-      error: workflow.error,
-      bookingId: workflow.bookingId,
-    };
-  },
-});
-
-/**
- * Cancel booking workflow
- */
-export const cancelBookingWorkflow = mutation({
-  args: { workflowId: v.id("_workflows") },
-  handler: async (ctx, { workflowId }) => {
-    const workflow = new Workflow(ctx, components.bookingWorkflow);
-    await workflow.cancel(ctx, workflowId);
-
-    await ctx.db.patch(workflowId, {
-      currentStep: "failed",
-      error: "Cancelled by user",
-    });
-  },
-});
-
-// ============================================
-// PARALLEL TASK WORKPOOL
+// PARALLEL NOTIFICATIONS
 // ============================================
 
 const notificationPool = new Workpool(components.notificationPool, {
@@ -339,17 +235,16 @@ const notificationPool = new Workpool(components.notificationPool, {
 /**
  * Send booking confirmation notification
  */
-export const sendBookingConfirmation = action({
+export const sendConfirmation = action({
   args: { bookingId: v.id("bookings") },
   handler: async (ctx, { bookingId }) => {
     const booking = await ctx.runQuery(internal.bookings.getById, { bookingId });
     if (!booking) return;
 
-    // Queue notification
-    await notificationPool.enqueueAction(ctx, internal.notifications.sendBookingConfirmed, {
-      bookingId,
-    });
+    await notificationPool.enqueueAction(
+      ctx,
+      internal.notifications.sendBookingConfirmed,
+      { bookingId }
+    );
   },
 });
-
-export {}; // Ensure module exports something

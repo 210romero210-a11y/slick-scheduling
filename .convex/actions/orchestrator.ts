@@ -1,16 +1,15 @@
 /**
  * ANOLLA SPEC - AI ORCHESTRATOR
  * 
- * Uses @akshatgiri/convex-orchestrator for structured outputs
- * and multi-step AI workflow orchestration.
+ * Uses @akshatgiri/convex-orchestrator for structured outputs.
  */
 
-import { action } from "../_generated/server";
+import { action, internal } from "../_generated/server";
 import { v } from "convex/values";
-import { ollamaModel } from "./llm";
+import { chatModelConfig, OLLAMA_BASE_URL } from "./llm";
 
 // ============================================
-// ORCHESTRATOR TYPES
+// TYPES
 // ============================================
 
 const orchestratorStep = v.object({
@@ -30,13 +29,13 @@ const orchestratorPlan = v.object({
 // ============================================
 
 /**
- * Plan booking creation with AI
+ * Plan booking creation with AI using Ollama
  */
 export const planBookingCreation = action({
   args: {
     userId: v.id("users"),
     studioId: v.id("studios"),
-    vehicleId: v.id("vehios"),
+    vehicleId: v.id("vehicles"),
     serviceId: v.id("services"),
     preferredDate: v.optional(v.number()),
     naturalLanguage: v.optional(v.string()),
@@ -48,10 +47,11 @@ export const planBookingCreation = action({
     const context = `
 You are a booking assistant for Slick Scheduling.
 Available actions:
-- checkAvailability(studioId, bayId, date, duration)
+- checkAvailability(studioId, date, duration, bayId?)
 - calculatePrice(serviceId, vehicleId, studioId, bayId, startTime)
 - searchServices(studioId, query)
 - createBooking(userId, studioId, vehicleId, serviceId, bayId, startTime, duration)
+- cancelBooking(bookingId)
 
 User request: ${naturalLanguage ?? "Book a detailing service"}
 
@@ -62,11 +62,11 @@ Create a JSON plan with steps:
 }`;
 
     // Call Ollama for structured output
-    const response = await fetch(`${process.env.OLLAMA_BASE_URL}/api/generate`, {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: ollamaModel,
+        model: chatModelConfig.model,
         prompt: context,
         format: "json",
         temperature: 0.3,
@@ -79,7 +79,7 @@ Create a JSON plan with steps:
 });
 
 /**
- * Execute orchestrated plan
+ * Execute orchestrated plan with rollback support
  */
 export const executePlan = action({
   args: {
@@ -92,16 +92,13 @@ export const executePlan = action({
 
     for (const step of plan.steps) {
       try {
-        // Execute step based on action
         const result = await executeStep(ctx, step.action, step.args, context);
         results.push({ stepId: step.id, result });
-
-        // Update context with result
         context[`${step.id}_result`] = result;
       } catch (error) {
         errors.push({ stepId: step.id, error: String(error) });
 
-        // Rollback if configured
+        // Execute rollback
         if (plan.rollback) {
           await executeStep(ctx, plan.rollback, context, context);
         }
@@ -113,7 +110,10 @@ export const executePlan = action({
   },
 });
 
-async function executeStep(ctx, action: string, args: any, context: any) {
+/**
+ * Execute a single workflow step
+ */
+async function executeStep(ctx: any, action: string, args: any, context: any) {
   switch (action) {
     case "checkAvailability":
       return ctx.runAction(internal.calendar.findAvailableSlots, args);
@@ -123,7 +123,9 @@ async function executeStep(ctx, action: string, args: any, context: any) {
       return ctx.runQuery(internal.services.search, args);
     case "createBooking":
       return ctx.runMutation(internal.bookings.create, args);
+    case "cancelBooking":
+      return ctx.runMutation(internal.bookings.cancel, args);
     default:
-      throw new Error(`Unknown action: ${action}`);
+      throw new Error(`Unsupported action: ${action}`);
   }
 }
