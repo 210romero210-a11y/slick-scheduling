@@ -1,24 +1,26 @@
 /**
  * ANOLLA SPEC - OLLAMA LLM CONFIGURATION
  * 
- * Configures Convex Agent component to use Ollama with gemma4:e4b model.
- * Place in: .convex/llm.ts
+ * Configures Ollama provider for Convex AI components.
+ * Models sourced from environment variables for easy swapping.
  */
 
 import { ollama } from "ai-sdk-ollama";
 
-// Ollama configuration
+// Model configuration from environment
 export const chatModelConfig = {
-  model: "gemma4:e4b",
+  model: process.env.OLLAMA_CHAT_MODEL || "gemma4:e4b",
   temperature: 0.7,
   maxTokens: 4096,
 };
 
-// Embedding model for RAG (qwen3-embedding:4b)
-export const embeddingModel = "qwen3-embedding:4b";
+export const embeddingModel = process.env.OLLAMA_EMBEDDING_MODEL || "qwen3-embedding:4b";
 
-// Create provider for agent component
+// Alias exports for convenience
+export const ollamaModel = chatModelConfig.model;
+
+// Create provider with configured base URL
 export const ollamaProvider = ollama(chatModelConfig);
 
-// Default Ollama server URL
+// Base URL from environment
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
